@@ -1,59 +1,140 @@
 {% extends 'base.html' %}
 {% block content %}
-    <h1>Preguntas</h1>
-    <div class="d-flex flex-column">
-        {% for question in object_list %}
-            <div class="card w-100 my-2 p-3">
-                <div class="d-flex flex-row">
-                    <div class="col-10">
-                        <i class="far fa-question-circle" title="{{ question.description }}"></i>
-                        <span class="fw-bold">{{ question.title }}</span>
-                    </div>
-                    <div class="col-2">
-                        <span class="fw-lighter">Autor:</span> {{ question.author }}
-                    </div>
+<h1>Preguntas</h1>
+<button id="ordenar">ordenar</button>
+<div id="questions" class="d-flex flex-column">
+    {% for question in questions %}
+    <div class="event_order   card w-100 my-2 p-3" data-question="{{question.pk}}" data-value="{{question.ranking}}">
+        <div class="d-flex flex-row">
+            <div class="col-10">
+                <i class="far fa-question-circle" title="{{ question.description }}"></i>
+                <span class="fw-bold">{{ question.title }}</span>
+            </div>
+            <div class="col-2">
+                <span class="fw-lighter">Autor:</span> {{ question.author }}
+            </div>
+        </div>
+        <br>
+        <div class="d-flex justify-content-between">
+            <div class="d-flex flex-column col-4">
+                {% if user.is_authenticated %}
+                <u class="fw-lighter mb-1">Respuesta</u>
+                <div>
+                    {% for val in '12345' %}
+                    <a class="event_answers mx-1 answer {% if question.user_value|slugify == val %}fas{% else %}fal{% endif %} fa-star text-decoration-none"
+                        data-question="{{ question.pk }}" data-value="{{ val }}"></a>
+                    {% endfor %}
                 </div>
-                <br>
-                <div class="d-flex justify-content-between">
-                    <div class="d-flex flex-column col-4">
-                        <u class="fw-lighter mb-1">Respuesta</u>
-                        <div>
-                            {% for val in '12345' %}
-                                <a class="mx-1 answer {% if question.user_value|slugify == val %}fas{% else %}fal{% endif %} fa-star text-decoration-none"
-                                   data-question="{{ question.pk }}"
-                                   data-value="{{ val }}" href="#"></a>
-                            {% endfor %}
-                        </div>
-                    </div>
-                    <div class="col-4 d-flex flex-column ">
-                        <u class="fw-lighter mb-1">Evalúa la pregunta</u>
-                        <div>
-                            <a class="mx-1 like {% if question.user_likes %}fas{% else %}fal{% endif %} fa-thumbs-up text-decoration-none"
-                               href="#" data-question="{{ question.pk }}" data-value="like" ></a>
-                            <a class="mx-1 like {% if question.user_dislikes %}fas{% else %}fal{% endif %} fa-thumbs-up fa-flip-both text-decoration-none"
-                               href="#" data-question="{{ question.pk }}" data-value="dislike"></a>
-                        </div>
-                    </div>
-                    <div class="col-2">
-                        <u class="fw-lighter mb-1">Ranking:</u>
-                        <div>
-                           {{ question.ranking }} pts.
-                        </div>
-
-
-                    </div>
+                {% else %}
+                <div>
+                    <a href="{% url 'login' %}">logeate para responder</a>
+                </div>
+                {% endif %}
+            </div>
+            <div class="col-4 d-flex flex-column ">
+                {% if user.is_authenticated %}
+                <u class="fw-lighter mb-1">Evalúa la pregunta</u>
+                <div>
+                    <a class="event_like_dislike mx-1 like {% if question.user_likes %}fas{% else %}fal{% endif %} fa-thumbs-up text-decoration-none"
+                        data-question="{{ question.pk }}" data-value="like"></a>
+                    <a class="event_like_dislike mx-1 like {% if question.user_dislikes %}fas{% else %}fal{% endif %} fa-thumbs-up fa-flip-both text-decoration-none"
+                        data-question="{{ question.pk }}" data-value="dislike"></a>
+                </div>
+                {% else %}
+                <div>
+                    <a href="{% url 'login' %}">logeate para responder</a>
+                </div>
+                {% endif %}
+            </div>
+            <div class="col-2">
+                <u class="fw-lighter mb-1">Ranking:</u>
+                <div data-question="{{ question.pk }}" class="event_ranking">
+                    {{ question.ranking }} pts.
                 </div>
             </div>
-        {% empty %}
-            <div>No hay preguntas.</div>
-        {% endfor %}
+        </div>
     </div>
+    {% empty %}
+    <div>No hay preguntas.</div>
+    {% endfor %}
+</div>
 {% endblock %}
 
 {% block js %}
     <script>
+        $(document).ready(function () {
+            function sort_questions() {
+                var sortedList = $('#questions .card').sort(function (lhs, rhs) {
+                    return parseInt($(rhs).attr(
+                        "data-value"), 10) - parseInt($(lhs).attr("data-value"), 10);
+                });
+                $("#questions").html(sortedList)
+            }
 
+            $('#ordenar').on('click', sort_questions);
+            $('body').on('click', ".event_like_dislike", function (event) {
+                let element = $(event.target);
+                let question_pk = element.attr("data-question");
+                let value = element.attr("data-value");
+                let value_index = value === 'like' ? 1 : 0
 
+                $.ajax({
+                    type: "POST",
+                    url: "question/like",
+                    data: {
+                        'csrfmiddlewaretoken': '{{ csrf_token }}',
+                        question_pk,
+                        value: value_index
+                    },
+                    success: function (result) {
+                        $(element).removeClass("fal").addClass('fas')
+                        let prop = 'like'
+                        const {
+                            ranking
+                        } = result;
+                        if (value_index === 1) {
+                            prop = 'dislike'
+                        }
+                        $(`[data-question=${question_pk}].event_like_dislike[data-value=${prop}]`)
+                            .removeClass("fas").addClass('fal')
+                        $(`[data-question=${question_pk}].event_ranking`).text(
+                            `${ranking} pts.`)
+                        $(`[data-question=${question_pk}].event_order`).attr("data-value",
+                            ranking)
+                    }
+                });
+            });
+
+            $('body').on('click', ".event_answers", function (event) {
+                let element = $(event.target);
+                let question_pk = element.attr("data-question");
+                let value = element.attr("data-value");
+
+                $.ajax({
+                    type: "POST",
+                    url: "question/answer",
+                    data: {
+                        'csrfmiddlewaretoken': '{{ csrf_token }}',
+                        question_pk,
+                        value
+                    },
+                    success: function (result) {
+                        var prop;
+                        $(`[data-question=${question_pk}].event_answers`).removeClass("fas")
+                            .addClass('fal')
+                        $(element).removeClass("fal").addClass('fas')
+                        const {
+                            ranking
+                        } = result;
+
+                        $(`[data-question=${question_pk}].event_ranking`).text(
+                            `${ranking} pts.`)
+                        $(`[data-question=${question_pk}].event_order`).attr("data-value",
+                            ranking)
+                    }
+                });
+            });
+        });
     </script>
 
 {% endblock %}
